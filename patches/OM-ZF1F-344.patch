@@ -1,0 +1,90 @@
+From 48ad3c3049384949d33928f4a7cbe1fa535a84da Mon Sep 17 00:00:00 2001
+From: Fabrizio Balliano <fabrizio.balliano@gmail.com>
+Date: Tue, 18 Apr 2023 09:29:25 +0100
+Subject: [PATCH 1/2] Fixed "emails are displayed incorrectly" with PHP 8.1+
+
+---
+ library/Zend/Mail/Transport/Sendmail.php | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/library/Zend/Mail/Transport/Sendmail.php b/library/Zend/Mail/Transport/Sendmail.php
+index 3d726266da..319b6853a9 100644
+--- a/library/Zend/Mail/Transport/Sendmail.php
++++ b/library/Zend/Mail/Transport/Sendmail.php
+@@ -58,7 +58,7 @@ class Zend_Mail_Transport_Sendmail extends Zend_Mail_Transport_Abstract
+      * @var string
+      * @access public
+      */
+-    public $EOL = PHP_EOL;
++    public $EOL = "\r\n";
+ 
+     /**
+      * error information
+
+From e38751eb41de5b4a8d90f087ffb5b23132a30ec9 Mon Sep 17 00:00:00 2001
+From: Fabrizio Balliano <fabrizio.balliano@gmail.com>
+Date: Tue, 18 Apr 2023 18:37:22 +0100
+Subject: [PATCH 2/2] A better patch supporting PHP7 too
+
+---
+ library/Zend/Mail/Transport/Sendmail.php | 31 ++++++++++++++++++------
+ 1 file changed, 23 insertions(+), 8 deletions(-)
+
+diff --git a/library/Zend/Mail/Transport/Sendmail.php b/library/Zend/Mail/Transport/Sendmail.php
+index 319b6853a9..fcc868f83b 100644
+--- a/library/Zend/Mail/Transport/Sendmail.php
++++ b/library/Zend/Mail/Transport/Sendmail.php
+@@ -97,13 +97,25 @@ public function __construct($parameters = null)
+      */
+     public function _sendMail()
+     {
++        $recipients = $this->recipients;
++        $subject = $this->_mail->getSubject();
++        $body = $this->body;
++        $header = $this->header;
++        $isWindowsOs = strtoupper(substr(PHP_OS, 0, 3)) == 'WIN';
++        if (PHP_VERSION_ID < 80000 && !$isWindowsOs) {
++            $recipients = str_replace("\r\n", "\n", $recipients);
++            $subject = str_replace("\r\n", "\n", $subject);
++            $body = str_replace("\r\n", "\n", $body);
++            $header = str_replace("\r\n", "\n", $header);
++        }
++
+         if ($this->parameters === null) {
+             set_error_handler([$this, '_handleMailErrors']);
+             $result = mail(
+-                $this->recipients,
+-                $this->_mail->getSubject(),
+-                $this->body,
+-                $this->header);
++                $recipients,
++                $subject,
++                $body,
++                $header);
+             restore_error_handler();
+         } else {
+             if(!is_string($this->parameters)) {
+@@ -120,16 +132,19 @@ public function _sendMail()
+             }
+ 
+             $fromEmailHeader = str_replace(' ', '', $this->parameters);
++            if (PHP_VERSION_ID < 80000 && !$isWindowsOs) {
++                $fromEmailHeader = str_replace("\r\n", "\n", $fromEmailHeader);
++            }
+             // Sanitize the From header
+             if (!Zend_Validate::is($fromEmailHeader, 'EmailAddress')) {
+                 throw new Zend_Mail_Transport_Exception('Potential code injection in From header');
+             } else {
+                 set_error_handler([$this, '_handleMailErrors']);
+                 $result = mail(
+-                    $this->recipients,
+-                    $this->_mail->getSubject(),
+-                    $this->body,
+-                    $this->header,
++                    $recipients,
++                    $subject,
++                    $body,
++                    $header,
+                     $fromEmailHeader);
+                 restore_error_handler();
+             }
