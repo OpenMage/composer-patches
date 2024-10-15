@@ -14,7 +14,7 @@
 @@ -2422,5 +2424,31 @@
          }
  
-         return implode($decoded);
+         return implode('', $decoded);
 +    }
 +
 +    /**
